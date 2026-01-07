@@ -1,0 +1,11 @@
+# General
+.DS_Store
+*.log
+.env
+.env.local
+.tmp/
+.idea/
+.vscode/
+coverage/
+build/
+dist/
