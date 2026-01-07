@@ -1,0 +1,69 @@
+name: Quality Gate
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
+
+jobs:
+  build:
+    name: make build
+    runs-on: ubuntu-latest
+    env:
+      MAKEFLAGS: "-j$(nproc)"
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Haskell
+        uses: haskell/actions/setup@v2
+        with:
+          ghc-version: 'latest'
+          cabal-version: 'latest'
+          enable-stack: true
+          stack-no-global: true
+          caching: true
+
+      - name: Set up Elm
+        uses: JorelAli/setup-elm@v1
+        with:
+          elm-version: 0.19.1
+
+      - name: Build
+        run: make build
+
+      - name: Locate Haskell Binary
+        id: haskell-bin
+        run: echo "path=$(stack path --local-install-root)/bin" >> $GITHUB_OUTPUT
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-artifacts
+          path: |
+            ${{ steps.haskell-bin.outputs.path }}/backend-exe
+            src/frontend/dist/index.html
+
+  release:
+    name: Create Release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-artifacts
+          path: dist
+
+      - name: Publish Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            dist/backend-exe
+            dist/index.html
+          generate_release_notes: true
