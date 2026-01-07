@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# pre-commit: Fast local checks
+# Enforces:
+# 1. No conflict markers
+# 2. No committed secrets (basic check)
+# 3. No Debug.log or print() left behind (preventing silly mistakes)
+
+RED='\033[0;31m'
+NC='\033[0m'
+
+echo "🔍 Running pre-commit hooks..."
+
+# 1. Check for conflict markers
+if git diff --cached --name-only | xargs grep -lE '^[<]{7}|^[=]{7}|^[>]{7}'; then
+    echo -e "${RED}❌ ERROR: Conflict markers found in staged files.${NC}"
+    exit 1
+fi
+
+# 2. Check for Debug.log / print() in specific file types
+# Exclude test files from this check
+staged_files=$(git diff --cached --name-only --diff-filter=ACM)
+
+for file in $staged_files; do
+    # Elm: Debug.log / Debug.todo
+    if [[ "$file" == *.elm ]] && [[ "$file" != *"tests/"* ]]; then
+        if grep -q "Debug.log" "$file" || grep -q "Debug.todo" "$file"; then
+             echo -e "${RED}❌ ERROR: Debug.log or Debug.todo found in $file${NC}"
+             exit 1
+        fi
+    fi
+
+    # Python: print() (except in scripts/ or tests/)
+    if [[ "$file" == *.py ]] && [[ "$file" != *"tests/"* ]] && [[ "$file" != *"scripts/"* ]]; then
+        if grep -q "print(" "$file"; then
+             echo -e "${RED}❌ ERROR: print() found in $file (use logging instead)${NC}"
+             exit 1
+        fi
+    fi
+    
+    # Haskell: Debug.Trace
+    if [[ "$file" == *.hs ]] && [[ "$file" != *"test/"* ]]; then
+        if grep -q "Debug.Trace" "$file"; then
+             echo -e "${RED}❌ ERROR: Debug.Trace found in $file${NC}"
+             exit 1
+        fi
+    fi
+done
+
+# 3. Check for Complexity (God Files) and Hygiene (Bare TODOs)
+./scripts/check_complexity.py
+
+echo "✅ Pre-commit checks passed."

@@ -1,0 +1,71 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# pre-push: The Gatekeeper
+# Enforces: make check (fmt + lint + test + build)
+# This prevents broken code from ever leaving the local machine.
+
+RED='\033[0;31m'
+NC='\033[0m'
+
+echo "🚧 Running pre-push gate (make check)..."
+
+# 0. Clean Tree Enforcement
+if [[ -n $(git status --porcelain) ]]; then
+    echo -e "${RED}❌ ERROR: Working tree is dirty (uncommitted changes or untracked files).${NC}"
+    echo "Rule: You must commit or stash everything before pushing."
+    exit 1
+fi
+
+# 1. Branch Naming Discipline
+current_branch=$(git rev-parse --abbrev-ref HEAD)
+# Allow 'HEAD' (detached) or 'main'/'master'
+if [[ "$current_branch" != "HEAD" && "$current_branch" != "main" && "$current_branch" != "master" ]]; then
+    # Regex: allowed prefixes followed by / and logic
+    if ! [[ "$current_branch" =~ ^(feat|fix|docs|chore|refactor|test|wip)/ ]]; then
+        echo -e "${RED}❌ ERROR: Invalid branch name '$current_branch'${NC}"
+        echo "Rule: Branches must follow 'type/description'"
+        echo "Allowed: feat/, fix/, docs/, chore/, refactor/, test/, wip/"
+        exit 1
+    fi
+fi
+
+# 2. Changelog Enforcement
+# If src/ has changed, CHANGELOG.md MUST be updated.
+# Exceptions: docs/*, chore/*, test/* branches OR explicit "[skip changelog]" in commit.
+
+# Compare against origin/master to see what is being pushed
+# (Fallback to master if origin/master unavailable, e.g. first push)
+base_ref="origin/master"
+if ! git rev-parse --verify "$base_ref" >/dev/null 2>&1; then
+    base_ref="master"
+fi
+
+if git rev-parse --verify "$base_ref" >/dev/null 2>&1; then
+    # Check if src/ was touched
+    if git diff --name-only "$base_ref"...HEAD | grep -q "^src/"; then
+        # Check if CHANGELOG was touched
+        if ! git diff --name-only "$base_ref"...HEAD | grep -q "CHANGELOG.md"; then
+            # Check for exceptions
+            last_msg=$(git log -1 --pretty=%B)
+            if [[ "$last_msg" == *"[skip changelog]"* ]]; then
+                 echo "⚠️  [skip changelog] detected. Proceeding."
+            elif [[ "$current_branch" =~ ^(docs|chore|test)/ ]]; then
+                 echo "ℹ️  Branch type '$current_branch' skips changelog check."
+            else
+                 echo -e "${RED}❌ ERROR: Code changes in src/ detected without CHANGELOG.md update.${NC}"
+                 echo "Rule: Significant changes must be logged."
+                 echo "Fix: Update CHANGELOG.md or amend commit with '[skip changelog]'."
+                 exit 1
+            fi
+        fi
+    fi
+fi
+
+if ! make check; then
+    echo -e "${RED}❌ ERROR: 'make check' failed. Push aborted.${NC}"
+    echo "Please fix the errors and try again."
+    exit 1
+fi
+
+echo "✅ Pre-push gate passed."
