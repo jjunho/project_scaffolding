@@ -1,0 +1,12 @@
+* text=auto
+
+*.sh text eol=lf
+*.py text eol=lf
+*.md text eol=lf
+*.apl text eol=lf
+*.hs text eol=lf
+*.elm text eol=lf
+
+*.png binary
+*.jpg binary
+*.ico binary

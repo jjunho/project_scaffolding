@@ -1,0 +1,16 @@
+# Project-wide Metadata
+# Used by initialization scripts (stack, npm, git) to configure new components.
+
+project:
+  name: "scaffold-project"
+  description: "A high-quality, AI-governed software scaffolding."
+
+author:
+  name: "Project Owner"
+  email: "dev@example.com"
+  github_username: "owner"
+  copyright_holder: "Project Owner"
+
+defaults:
+  license: "MIT"
+  version: "0.0.0"
